@@ -453,6 +453,14 @@ func UniqueString(prefix string) string {
 	return prefix + uniqueSuffix
 }
 
+func UniqueStringWithLength(prefix string, length int) string {
+	str := UniqueString(prefix)
+	if len(str) > length {
+		Panic()
+	}
+	return str + strings.Repeat("a", length-len(str))
+}
+
 // Return codes for CheckPath
 type PathKind string
 
