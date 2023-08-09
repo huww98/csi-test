@@ -1387,8 +1387,7 @@ var _ = DescribeSanity("DeleteSnapshot [Controller Server]", func(sc *TestContex
 
 		By("creating a volume")
 		volReq := MakeCreateVolumeReq(sc, UniqueString("DeleteSnapshot-volume-1"))
-		volume, err := r.CreateVolume(context.Background(), volReq)
-		Expect(err).NotTo(HaveOccurred())
+		volume := r.MustCreateVolume(context.Background(), volReq)
 		r.MustAttachVolume(context.Background(), volume)
 
 		// Create Snapshot First
