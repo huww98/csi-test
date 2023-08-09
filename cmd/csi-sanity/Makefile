@@ -20,6 +20,7 @@ SHA := $(shell git rev-parse --short HEAD)
 ARCH := $(shell go env GOARCH)
 GOOS := $(shell go env GOOS)
 DIR=.
+BINARY ?= $(APP_NAME)
 
 ifdef APP_SUFFIX
   VERSION = $(VER)-$(subst /,-,$(APP_SUFFIX))
@@ -38,13 +39,13 @@ all: $(APP_NAME)
 
 .PHONY: $(APP_NAME)
 $(APP_NAME): Makefile
-	go build $(LDFLAGS) -o $(APP_NAME)
+	go build $(LDFLAGS) -o $(BINARY)
 
 install: $(APP_NAME)
 	cp $(APP_NAME) $(GOPATH)/bin
 
 clean:
-	rm -f csi-sanity
+	rm -f $(BINARY)
 
 dist-clean:
 	rm -rf $(DIR)/dist
@@ -54,7 +55,7 @@ dist: clean $(PACKAGE)
 $(PACKAGE): $(APP_NAME)
 	@echo Packaging Binaries...
 	@mkdir -p tmp/$(APP_NAME)
-	@cp $(APP_NAME) tmp/$(APP_NAME)/
+	@cp $(BINARY) tmp/$(APP_NAME)/
 	@mkdir -p $(DIR)/dist/
 	tar -czf $@ -C tmp $(APP_NAME);
 	@rm -rf tmp
