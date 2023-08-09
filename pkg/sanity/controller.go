@@ -1389,6 +1389,7 @@ var _ = DescribeSanity("DeleteSnapshot [Controller Server]", func(sc *TestContex
 		volReq := MakeCreateVolumeReq(sc, UniqueString("DeleteSnapshot-volume-1"))
 		volume, err := r.CreateVolume(context.Background(), volReq)
 		Expect(err).NotTo(HaveOccurred())
+		r.MustAttachVolume(context.Background(), volume)
 
 		// Create Snapshot First
 		By("creating a snapshot")
@@ -1455,6 +1456,7 @@ var _ = DescribeSanity("CreateSnapshot [Controller Server]", func(sc *TestContex
 		By("creating a volume")
 		volReq := MakeCreateVolumeReq(sc, UniqueString("CreateSnapshot-volume-1"))
 		volume := r.MustCreateVolume(context.Background(), volReq)
+		r.MustAttachVolume(context.Background(), volume)
 
 		By("creating a snapshot")
 		snapReq1 := MakeCreateSnapshotReq(sc, UniqueString("CreateSnapshot-snapshot-1"), volume.GetVolume().GetVolumeId())
@@ -1489,6 +1491,7 @@ var _ = DescribeSanity("CreateSnapshot [Controller Server]", func(sc *TestContex
 		By("creating a volume")
 		volReq := MakeCreateVolumeReq(sc, UniqueString("CreateSnapshot-volume-maxlen-name"))
 		volume := r.MustCreateVolume(context.Background(), volReq)
+		r.MustAttachVolume(context.Background(), volume)
 
 		name := UniqueStringWithLength("CreateSnapshot-snapshot-maxlen", MaxNameLength)
 

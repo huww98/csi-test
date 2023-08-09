@@ -188,6 +188,8 @@ func (cl *Resources) mustCreateSnapshotWithOffset(ctx context.Context, offset in
 // snapshot and asserts that both were created successfully.
 func (cl *Resources) MustCreateSnapshotFromVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, snapshotName string, waitForReady bool) (*csi.CreateSnapshotResponse, *csi.CreateVolumeResponse) {
 	vol := cl.mustCreateVolumeWithOffset(ctx, 2, req)
+	cl.mustAttachVolumeWithOffset(ctx, 2, vol)
+
 	snapReq := MakeCreateSnapshotReq(cl.Context, snapshotName, vol.Volume.VolumeId)
 	snap := cl.mustCreateSnapshotWithOffset(ctx, 2, snapReq, waitForReady)
 	return snap, vol
@@ -218,6 +220,30 @@ func (cl *Resources) deleteSnapshot(ctx context.Context, offset int, req *csi.De
 		cl.unregisterResource(offset+1, req.SnapshotId)
 	}
 	return snap, err
+}
+
+// Alicloud specific, need to attach volume to node before creating any snapshot
+func (cl *Resources) MustAttachVolume(ctx context.Context, vol *csi.CreateVolumeResponse) {
+	cl.mustAttachVolumeWithOffset(ctx, 2, vol)
+}
+
+func (cl *Resources) mustAttachVolumeWithOffset(ctx context.Context, offset int, vol *csi.CreateVolumeResponse) {
+	nid, err := cl.NodeGetInfo(ctx, &csi.NodeGetInfoRequest{})
+	ExpectWithOffset(offset, err).NotTo(HaveOccurred())
+	ExpectWithOffset(offset, nid).NotTo(BeNil())
+	ExpectWithOffset(offset, nid.GetNodeId()).NotTo(BeEmpty())
+
+	conpubvol := cl.MustControllerPublishVolume(ctx, MakeControllerPublishVolumeReq(cl.Context, vol, nid.GetNodeId()))
+
+	_, err = cl.NodeStageVolume(ctx, &csi.NodeStageVolumeRequest{
+		VolumeId:          vol.GetVolume().GetVolumeId(),
+		VolumeCapability:  TestVolumeCapabilityWithAccessType(cl.Context, csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER),
+		StagingTargetPath: cl.Context.StagingPath,
+		VolumeContext:     vol.GetVolume().GetVolumeContext(),
+		PublishContext:    conpubvol.GetPublishContext(),
+		Secrets:           cl.Context.Secrets.NodeStageVolumeSecret,
+	})
+	ExpectWithOffset(offset, err).NotTo(HaveOccurred())
 }
 
 func (cl *Resources) registerSnapshot(offset int, id string) {
