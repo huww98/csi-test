@@ -45,6 +45,10 @@ type volumeInfo struct {
 	// Node on which the volume was published, empty if none
 	// or publishing is not supported.
 	NodeID string
+
+	// If this volume should be deleted after all tests
+	// to speedup the test
+	DelayDelete bool
 }
 
 // snapshotInfo keeps track of the information needed to delete a snapshot.
@@ -126,7 +130,9 @@ func (cl *Resources) mustCreateVolumeWithOffset(ctx context.Context, offset int,
 func (cl *Resources) createVolume(ctx context.Context, offset int, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	vol, err := cl.ControllerClient.CreateVolume(ctx, req)
 	if err == nil && vol != nil && vol.GetVolume().GetVolumeId() != "" {
-		cl.registerVolume(offset+1, vol.GetVolume().GetVolumeId(), volumeInfo{})
+		cl.registerVolume(offset+1, vol.GetVolume().GetVolumeId(), volumeInfo{
+			DelayDelete: req.VolumeContentSource == nil,
+		})
 	}
 	return vol, err
 }
@@ -151,7 +157,7 @@ func (cl *Resources) MustControllerPublishVolume(ctx context.Context, req *csi.C
 func (cl *Resources) controllerPublishVolume(ctx context.Context, offset int, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
 	conpubvol, err := cl.ControllerClient.ControllerPublishVolume(ctx, req)
 	if err == nil && req.VolumeId != "" && req.NodeId != "" {
-		cl.registerVolume(offset+1, req.VolumeId, volumeInfo{NodeID: req.NodeId})
+		cl.registerVolume(offset+1, req.VolumeId, volumeInfo{NodeID: req.NodeId, DelayDelete: true})
 	}
 	return conpubvol, err
 }
@@ -346,14 +352,16 @@ func (cl *Resources) cleanupVolume(ctx context.Context, offset int, volumeID str
 		}
 	}
 
-	if _, err := cl.ControllerClient.DeleteVolume(
-		ctx,
-		&csi.DeleteVolumeRequest{
+	delReq := &csi.DeleteVolumeRequest{
 			VolumeId: volumeID,
 			Secrets:  cl.Context.Secrets.DeleteVolumeSecret,
-		},
-	); err != nil {
+	}
+	if info.DelayDelete {
+		cl.Context.volumeDeleteQueue = append(cl.Context.volumeDeleteQueue, delReq)
+	} else {
+		if _, err := cl.ControllerClient.DeleteVolume(ctx, delReq); err != nil {
 		errs = append(errs, fmt.Errorf("DeleteVolume for volume ID %s failed: %s", volumeID, err))
+	}
 	}
 
 	return errs

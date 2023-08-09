@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/kubernetes-csi/csi-test/v5/utils"
 	yaml "gopkg.in/yaml.v2"
 
@@ -183,6 +184,8 @@ type TestContext struct {
 	// Target and staging paths derived from the sanity config.
 	TargetPath  string
 	StagingPath string
+
+	volumeDeleteQueue []*csi.DeleteVolumeRequest
 }
 
 // NewTestConfig returns a config instance with all values set to
@@ -321,6 +324,18 @@ func (sc *TestContext) Teardown() {
 // Finalize frees any resources that might be still cached in the context.
 // It should be called after running all tests.
 func (sc *TestContext) Finalize() {
+	if len(sc.volumeDeleteQueue) > 0 {
+		ctx := context.Background()
+		client := csi.NewControllerClient(sc.ControllerConn)
+
+		for _, req := range sc.volumeDeleteQueue {
+			if _, err := client.DeleteVolume(ctx, req); err != nil {
+				fmt.Printf("DeleteVolume for volume ID %s failed: %v", req.VolumeId, err)
+			}
+		}
+		sc.volumeDeleteQueue = []*csi.DeleteVolumeRequest{}
+	}
+
 	if sc.Conn != nil {
 		sc.Conn.Close()
 	}
