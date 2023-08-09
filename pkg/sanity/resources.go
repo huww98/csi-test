@@ -353,22 +353,22 @@ func (cl *Resources) cleanupVolume(ctx context.Context, offset int, volumeID str
 	}
 
 	delReq := &csi.DeleteVolumeRequest{
-			VolumeId: volumeID,
-			Secrets:  cl.Context.Secrets.DeleteVolumeSecret,
+		VolumeId: volumeID,
+		Secrets:  cl.Context.Secrets.DeleteVolumeSecret,
 	}
 	if info.DelayDelete {
 		cl.Context.volumeDeleteQueue = append(cl.Context.volumeDeleteQueue, delReq)
 	} else {
 		if _, err := cl.ControllerClient.DeleteVolume(ctx, delReq); err != nil {
-		errs = append(errs, fmt.Errorf("DeleteVolume for volume ID %s failed: %s", volumeID, err))
-	}
+			errs = append(errs, fmt.Errorf("DeleteVolume for volume ID %s failed: %s", volumeID, err))
+		}
 	}
 
 	return errs
 }
 
 func (cl *Resources) cleanupSnapshot(ctx context.Context, offset int, snapshotID string) []error {
-	klog.Infof("deleting snapshot ID %s", snapshotID)
+	klog.V(4).Infof("deleting snapshot ID %s", snapshotID)
 	if _, err := cl.ControllerClient.DeleteSnapshot(
 		ctx,
 		&csi.DeleteSnapshotRequest{
