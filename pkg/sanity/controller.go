@@ -915,10 +915,9 @@ var _ = DescribeSanity("Controller Service [Controller Server]", func(sc *TestCo
 			for i := int64(0); i < nodeInfo.MaxVolumesPerNode; i++ {
 				name := UniqueString(fmt.Sprintf("sanity-max-attach-limit-vol-%d", i))
 				vol := r.MustCreateVolume(context.Background(), MakeCreateVolumeReq(sc, name))
-				volID := vol.GetVolume().GetVolumeId()
 				r.MustControllerPublishVolume(
 					context.Background(),
-					MakeControllerPublishVolumeReq(sc, volID, nid),
+					MakeControllerPublishVolumeReq(sc, vol, nid),
 				)
 			}
 
@@ -927,7 +926,7 @@ var _ = DescribeSanity("Controller Service [Controller Server]", func(sc *TestCo
 
 			_, err = r.ControllerPublishVolume(
 				context.Background(),
-				MakeControllerPublishVolumeReq(sc, vol.Volume.VolumeId, nid),
+				MakeControllerPublishVolumeReq(sc, vol, nid),
 			)
 			Expect(err).To(HaveOccurred())
 		})
@@ -1647,9 +1646,10 @@ func MakeDeleteVolumeReq(sc *TestContext, id string) *csi.DeleteVolumeRequest {
 }
 
 // MakeControllerPublishVolumeReq creates and returns a ControllerPublishVolumeRequest.
-func MakeControllerPublishVolumeReq(sc *TestContext, volID, nodeID string) *csi.ControllerPublishVolumeRequest {
+func MakeControllerPublishVolumeReq(sc *TestContext, vol *csi.CreateVolumeResponse, nodeID string) *csi.ControllerPublishVolumeRequest {
 	return &csi.ControllerPublishVolumeRequest{
-		VolumeId:         volID,
+		VolumeId:         vol.GetVolume().VolumeId,
+		VolumeContext:    vol.GetVolume().VolumeContext,
 		NodeId:           nodeID,
 		VolumeCapability: TestVolumeCapabilityWithAccessType(sc, csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER),
 		Readonly:         false,
