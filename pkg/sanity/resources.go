@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -98,7 +99,7 @@ func (cl *Resources) ControllerPublishVolume(ctx context.Context, in *csi.Contro
 // CreateSnapshot proxies to a Controller service implementation and registers
 // the snapshot for cleanup.
 func (cl *Resources) CreateSnapshot(ctx context.Context, in *csi.CreateSnapshotRequest, _ ...grpc.CallOption) (*csi.CreateSnapshotResponse, error) {
-	return cl.createSnapshot(ctx, 2, in)
+	return cl.createSnapshot(ctx, 2, in, false)
 }
 
 // DeleteSnapshot proxies to a Controller service implementation and unregisters
@@ -171,11 +172,11 @@ func (cl *Resources) registerVolume(offset int, id string, info volumeInfo) {
 // MustCreateSnapshot is like CreateSnapshot but asserts that the snapshot was
 // successfully created.
 func (cl *Resources) MustCreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) *csi.CreateSnapshotResponse {
-	return cl.mustCreateSnapshotWithOffset(ctx, 2, req)
+	return cl.mustCreateSnapshotWithOffset(ctx, 2, req, false)
 }
 
-func (cl *Resources) mustCreateSnapshotWithOffset(ctx context.Context, offset int, req *csi.CreateSnapshotRequest) *csi.CreateSnapshotResponse {
-	snap, err := cl.createSnapshot(ctx, offset+1, req)
+func (cl *Resources) mustCreateSnapshotWithOffset(ctx context.Context, offset int, req *csi.CreateSnapshotRequest, waitForReady bool) *csi.CreateSnapshotResponse {
+	snap, err := cl.createSnapshot(ctx, offset+1, req, waitForReady)
 	ExpectWithOffset(offset, err).NotTo(HaveOccurred(), "create snapshot failed")
 	ExpectWithOffset(offset, snap).NotTo(BeNil(), "create snasphot response is nil")
 	verifySnapshotInfoWithOffset(offset+1, snap.GetSnapshot())
@@ -185,18 +186,30 @@ func (cl *Resources) mustCreateSnapshotWithOffset(ctx context.Context, offset in
 // MustCreateSnapshotFromVolumeRequest creates a volume from the given
 // CreateVolumeRequest and a snapshot subsequently. It registers the volume and
 // snapshot and asserts that both were created successfully.
-func (cl *Resources) MustCreateSnapshotFromVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, snapshotName string) (*csi.CreateSnapshotResponse, *csi.CreateVolumeResponse) {
+func (cl *Resources) MustCreateSnapshotFromVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, snapshotName string, waitForReady bool) (*csi.CreateSnapshotResponse, *csi.CreateVolumeResponse) {
 	vol := cl.mustCreateVolumeWithOffset(ctx, 2, req)
-	snap := cl.mustCreateSnapshotWithOffset(ctx, 2, MakeCreateSnapshotReq(cl.Context, snapshotName, vol.Volume.VolumeId))
+	snapReq := MakeCreateSnapshotReq(cl.Context, snapshotName, vol.Volume.VolumeId)
+	snap := cl.mustCreateSnapshotWithOffset(ctx, 2, snapReq, waitForReady)
 	return snap, vol
 }
 
-func (cl *Resources) createSnapshot(ctx context.Context, offset int, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
-	snap, err := cl.ControllerClient.CreateSnapshot(ctx, req)
-	if err == nil && snap.GetSnapshot().GetSnapshotId() != "" {
+func (cl *Resources) createSnapshot(ctx context.Context, offset int, req *csi.CreateSnapshotRequest, waitForReady bool) (*csi.CreateSnapshotResponse, error) {
+	var snap *csi.CreateSnapshotResponse
+	for {
+		var err error
+		snap, err = cl.ControllerClient.CreateSnapshot(ctx, req)
+		if err != nil {
+			return snap, err
+		}
+		if !waitForReady || snap.Snapshot.ReadyToUse {
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
+	if snap.GetSnapshot().GetSnapshotId() != "" {
 		cl.registerSnapshot(offset+1, snap.Snapshot.SnapshotId)
 	}
-	return snap, err
+	return snap, nil
 }
 
 func (cl *Resources) deleteSnapshot(ctx context.Context, offset int, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
