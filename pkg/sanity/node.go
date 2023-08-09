@@ -580,6 +580,9 @@ var _ = DescribeSanity("Node Service", func(sc *TestContext) {
 							},
 						},
 					},
+					CapacityRange: &csi.CapacityRange{
+						RequiredBytes: TestVolumeSize(sc),
+					},
 					Secrets:    sc.Secrets.CreateVolumeSecret,
 					Parameters: sc.Config.TestVolumeParameters,
 				},
